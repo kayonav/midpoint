@@ -1,3 +1,5 @@
-export type { LatLng } from "./types.js";
 export { centroid } from "./centroid.js";
-export { toXY, toLatLng, dist } from "./geo.js";
+export { dist, toLatLng, toXY } from "./geo.js";
+export type { MedianOptions, MedianResult } from "./geometricMedian.js";
+export { geometricMedian } from "./geometricMedian.js";
+export type { LatLng } from "./types.js";

@@ -14,19 +14,19 @@ export type XY = readonly [number, number];
  * meters first keeps the optimization isotropic.
  */
 export function toXY(p: LatLng, ref: LatLng): XY {
-  return [
-    R * rad(p.lng - ref.lng) * Math.cos(rad(ref.lat)),
-    R * rad(p.lat - ref.lat),
-  ];
+	return [
+		R * rad(p.lng - ref.lng) * Math.cos(rad(ref.lat)),
+		R * rad(p.lat - ref.lat),
+	];
 }
 
 export function toLatLng([x, y]: XY, ref: LatLng): LatLng {
-  return {
-    lat: ref.lat + deg(y / R),
-    lng: ref.lng + deg(x / (R * Math.cos(rad(ref.lat)))),
-  };
+	return {
+		lat: ref.lat + deg(y / R),
+		lng: ref.lng + deg(x / (R * Math.cos(rad(ref.lat)))),
+	};
 }
 
 export function dist(a: XY, b: XY): number {
-  return Math.hypot(a[0] - b[0], a[1] - b[1]);
+	return Math.hypot(a[0] - b[0], a[1] - b[1]);
 }
