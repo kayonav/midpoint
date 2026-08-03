@@ -1,0 +1,28 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# env — never commit real keys
+.env
+.env.local
+.env.*.local
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# test / coverage
+coverage/
+.vitest/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# editor / OS
+.DS_Store
+.vscode/
+.idea/
