@@ -217,6 +217,12 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(vite@8.2.0)
 
+  packages/cache:
+    devDependencies:
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(vite@8.2.0)
+
   packages/optimizer:
     devDependencies:
       vitest:
