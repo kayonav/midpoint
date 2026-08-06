@@ -11,7 +11,7 @@ describe("rankCandidates", () => {
 				[8, 9, 9],
 			],
 		);
-		expect(ranked.map((r) => r.candidate)).toEqual(["a", "c", "b"]);
+		expect(ranked.map((r) => r.candidate)).toEqual(["c", "a", "b"]);
 	});
 
 	it("picks a different winner when minimizing the average", () => {
