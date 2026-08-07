@@ -3,5 +3,6 @@ packages:
   - 'api'
   - 'web'
 
+strictDepBuilds: false
 ignoredBuiltDependencies:
   - esbuild
