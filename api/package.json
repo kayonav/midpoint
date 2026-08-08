@@ -19,6 +19,7 @@
 		"@midpoint/cache": "workspace:*",
 		"@midpoint/optimizer": "workspace:*",
 		"@midpoint/places": "workspace:*",
-		"fastify": "^5.11.2"
+		"fastify": "^5.11.2",
+		"ioredis": "^6.0.0"
 	}
 }
