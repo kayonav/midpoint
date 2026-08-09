@@ -9,7 +9,7 @@ const origins = [
 ];
 
 function place(id: number, lat: number, lng: number): Place {
-	return { id, name: `Place ${id}`, lat, lng, category: "cafe" };
+	return { id, name: `Place ${id}`, lat, lng, category: "park" };
 }
 
 describe("planMeet", () => {
@@ -20,7 +20,20 @@ describe("planMeet", () => {
 		const query = finder.mock.calls[0][0];
 		expect(query.lat).toBeCloseTo(result.median.lat, 6);
 		expect(query.lng).toBeCloseTo(result.median.lng, 6);
-		expect(query.category).toBe("cafe");
+	});
+
+	it("defaults to the food and drink vibe", async () => {
+		const finder = vi.fn().mockResolvedValue([]);
+		await planMeet({ origins }, finder);
+		expect(finder.mock.calls[0][0].vibe).toBe("food_drink");
+	});
+
+	it("passes through the chosen vibe and radius", async () => {
+		const finder = vi.fn().mockResolvedValue([]);
+		await planMeet({ origins, vibe: "high_energy", radiusMeters: 500 }, finder);
+
+		expect(finder.mock.calls[0][0].vibe).toBe("high_energy");
+		expect(finder.mock.calls[0][0].radiusMeters).toBe(500);
 	});
 
 	it("ranks the nearest-to-everyone candidate first", async () => {
@@ -52,14 +65,6 @@ describe("planMeet", () => {
 		expect(median).toBeDefined();
 	});
 
-	it("passes through category and radius", async () => {
-		const finder = vi.fn().mockResolvedValue([]);
-		await planMeet({ origins, category: "bar", radiusMeters: 500 }, finder);
-
-		expect(finder.mock.calls[0][0].category).toBe("bar");
-		expect(finder.mock.calls[0][0].radiusMeters).toBe(500);
-	});
-
 	it("rejects empty or invalid origins", async () => {
 		const finder = vi.fn();
 		await expect(planMeet({ origins: [] }, finder)).rejects.toThrow(
@@ -67,6 +72,14 @@ describe("planMeet", () => {
 		);
 		await expect(
 			planMeet({ origins: [{ lat: 200, lng: 0 }] }, finder),
+		).rejects.toThrow(ValidationError);
+		expect(finder).not.toHaveBeenCalled();
+	});
+
+	it("rejects an unknown vibe without calling out", async () => {
+		const finder = vi.fn();
+		await expect(
+			planMeet({ origins, vibe: "vibes_unknown" }, finder),
 		).rejects.toThrow(ValidationError);
 		expect(finder).not.toHaveBeenCalled();
 	});

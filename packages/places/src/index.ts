@@ -9,3 +9,5 @@ export {
 } from "./overpass.js";
 export type { RetryOptions } from "./retry.js";
 export { fetchWithRetry, RETRYABLE_STATUS } from "./retry.js";
+export type { TagFilter, Vibe } from "./vibes.js";
+export { DEFAULT_VIBE, getVibe, matchFilter, VIBES } from "./vibes.js";

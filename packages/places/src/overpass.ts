@@ -1,11 +1,13 @@
 import { type Cache, withCache } from "@midpoint/cache";
 import { fetchWithRetry, type RetryOptions } from "./retry.js";
+import { getVibe, matchFilter, type TagFilter } from "./vibes.js";
 
 export interface Place {
 	id: number;
 	name: string;
 	lat: number;
 	lng: number;
+	/** The OSM value that matched, e.g. "park" or "viewpoint". */
 	category: string;
 }
 
@@ -13,7 +15,7 @@ export interface PlacesQuery {
 	lat: number;
 	lng: number;
 	radiusMeters: number;
-	category: string;
+	vibe: string;
 }
 
 export interface OverpassDeps {
@@ -42,10 +44,24 @@ interface OverpassElement {
 	tags?: Record<string, string>;
 }
 
+/**
+ * A vibe spans several OSM tag keys, so the query is a union of one clause per
+ * filter. Overpass evaluates the whole union in a single request, which keeps
+ * this to one round trip and one cache entry rather than six of each.
+ */
 export function buildQuery(q: PlacesQuery): string {
+	const clauses = getVibe(q.vibe)
+		.filters.map(
+			(f) =>
+				`  nwr["${f.key}"="${f.value}"](around:${q.radiusMeters},${q.lat},${q.lng});`,
+		)
+		.join("\n");
+
 	return `[out:json][timeout:25];
-nwr["amenity"="${q.category}"](around:${q.radiusMeters},${q.lat},${q.lng});
-out center 50;`;
+(
+${clauses}
+);
+out center 60;`;
 }
 
 /**
@@ -55,12 +71,12 @@ out center 50;`;
  */
 export function cacheKey(q: PlacesQuery): string {
 	const r = (n: number) => n.toFixed(4);
-	return `places:${q.category}:${r(q.lat)},${r(q.lng)}:${q.radiusMeters}`;
+	return `places:${q.vibe}:${r(q.lat)},${r(q.lng)}:${q.radiusMeters}`;
 }
 
 export function parseElements(
 	elements: readonly OverpassElement[],
-	category: string,
+	filters: readonly TagFilter[],
 ): Place[] {
 	const places: Place[] = [];
 	for (const el of elements) {
@@ -71,7 +87,10 @@ export function parseElements(
 		const lon = el.lon ?? el.center?.lon;
 		if (lat === undefined || lon === undefined) continue;
 
-		places.push({ id: el.id, name, lat, lng: lon, category });
+		const match = matchFilter(el.tags, filters);
+		if (!match) continue;
+
+		places.push({ id: el.id, name, lat, lng: lon, category: match.value });
 	}
 	return places;
 }
@@ -87,6 +106,8 @@ export async function findPlaces(
 		ttlSeconds = DEFAULT_TTL,
 		retry,
 	} = deps;
+
+	const filters = getVibe(q.vibe).filters;
 
 	return withCache(cache, cacheKey(q), ttlSeconds, async () => {
 		const res = await fetchWithRetry(
@@ -108,6 +129,6 @@ export async function findPlaces(
 		}
 
 		const body = (await res.json()) as { elements?: OverpassElement[] };
-		return parseElements(body.elements ?? [], q.category);
+		return parseElements(body.elements ?? [], filters);
 	});
 }

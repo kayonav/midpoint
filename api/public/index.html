@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Midpoint</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; display: flex; height: 100vh; overflow: hidden;
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #14161a; color: #e6e8eb;
+  }
+  #sidebar { width: 340px; flex: none; padding: 20px; overflow-y: auto; border-right: 1px solid #262a31; }
+  #map { flex: 1; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: #8b929c; font-size: 13px; margin: 0 0 18px; }
+  label { display: block; font-size: 12px; color: #8b929c; margin: 14px 0 6px; }
+  select, button {
+    width: 100%; padding: 8px 10px; border-radius: 6px;
+    border: 1px solid #333942; background: #1c1f25; color: #e6e8eb; font-size: 13px;
+  }
+  button { cursor: pointer; margin-top: 14px; }
+  button.primary { background: #3b82f6; border-color: #3b82f6; color: #fff; font-weight: 600; }
+  button.primary:disabled { opacity: .5; cursor: default; }
+  .vibes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .vibe { padding: 8px; text-align: left; margin: 0; width: auto; }
+  .vibe.active { border-color: #3b82f6; background: #1e2a3d; }
+  .vlabel { font-weight: 600; font-size: 12px; }
+  .vdesc { color: #8b929c; font-size: 11px; line-height: 1.35; margin-top: 2px; }
+  .count { margin-top: 16px; font-size: 12px; color: #8b929c; }
+  .card { border: 1px solid #262a31; border-radius: 8px; padding: 10px 12px; margin-top: 8px; background: #191c21; cursor: pointer; }
+  .card:hover { border-color: #3b82f6; }
+  .rank { color: #3b82f6; font-weight: 700; margin-right: 6px; }
+  .name { font-weight: 600; }
+  .kind { font-size: 10px; text-transform: uppercase; color: #8b929c; border: 1px solid #333942; border-radius: 4px; padding: 0 5px; margin-left: 6px; }
+  .stats { color: #8b929c; font-size: 12px; margin-top: 4px; }
+  .err { color: #f87171; margin-top: 12px; font-size: 13px; }
+  .hint { color: #6b7280; font-size: 12px; margin-top: 20px; }
+  .leaflet-container { background: #1c1f25; }
+</style>
+</head>
+<body>
+  <div id="sidebar">
+    <h1>Midpoint</h1>
+    <p class="sub">Click the map to drop each person's starting point.</p>
+    <label for="vibes">What's the vibe?</label>
+    <div class="vibes" id="vibes"></div>
+    <label for="minimize">Fairness strategy</label>
+    <select id="minimize">
+      <option value="max">Minimize worst individual trip</option>
+      <option value="average">Minimize average trip</option>
+    </select>
+    <button type="button" class="primary" id="find" disabled>Find meeting spot</button>
+    <button type="button" id="clear">Clear points</button>
+    <div class="count" id="count">0 starting points</div>
+    <div id="error"></div>
+    <div id="results"></div>
+    <p class="hint">Try three points close together and one far away, then switch strategies.</p>
+  </div>
+  <div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(() => {
+  var map = L.map('map').setView([40.7180, -73.9980], 13);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO', maxZoom: 19
+  }).addTo(map);
+
+  var origins = [], selectedVibe = null;
+  var originLayer = L.layerGroup().addTo(map);
+  var resultLayer = L.layerGroup().addTo(map);
+  var findBtn = document.getElementById('find');
+  var countEl = document.getElementById('count');
+  var errorEl = document.getElementById('error');
+  var resultsEl = document.getElementById('results');
+  var vibesEl = document.getElementById('vibes');
+
+  fetch('/vibes').then((r) => r.json()).then((vibes) => {
+    vibes.forEach((v, i) => {
+      var btn = document.createElement('button');
+      btn.className = 'vibe' + (i === 0 ? ' active' : '');
+      btn.type = 'button';
+      btn.innerHTML = '<div class="vlabel"></div><div class="vdesc"></div>';
+      btn.querySelector('.vlabel').textContent = v.label;
+      btn.querySelector('.vdesc').textContent = v.description;
+      btn.onclick = () => {
+        selectedVibe = v.id;
+        Array.prototype.forEach.call(vibesEl.children, (b) => { b.classList.remove('active'); });
+        btn.classList.add('active');
+      };
+      vibesEl.appendChild(btn);
+      if (i === 0) selectedVibe = v.id;
+    });
+  });
+
+  function dot(bg, color, size, radius, text) {
+    return L.divIcon({
+      className: '',
+      html: '<div style="background:' + bg + ';color:' + color + ';width:' + size + 'px;height:' + size
+        + 'px;border-radius:' + radius + ';display:flex;align-items:center;justify-content:center;'
+        + 'font-weight:700;font-size:12px;border:2px solid #14161a">' + text + '</div>',
+      iconSize: [size, size], iconAnchor: [size / 2, size / 2]
+    });
+  }
+
+  function redraw() {
+    originLayer.clearLayers();
+    origins.forEach((o, i) => {
+      L.marker([o.lat, o.lng], { icon: dot('#e6e8eb', '#14161a', 26, '50%', i + 1) })
+        .bindTooltip('Person ' + (i + 1)).addTo(originLayer);
+    });
+    countEl.textContent = origins.length + (origins.length === 1 ? ' starting point' : ' starting points');
+    findBtn.disabled = origins.length < 2;
+  }
+
+  map.on('click', (e) => {
+    origins.push({ lat: e.latlng.lat, lng: e.latlng.lng });
+    redraw();
+  });
+
+  document.getElementById('clear').onclick = () => {
+    origins = [];
+    resultLayer.clearLayers();
+    resultsEl.innerHTML = '';
+    errorEl.textContent = '';
+    redraw();
+  };
+
+  function dist(m) { return m >= 1000 ? (m / 1000).toFixed(1) + ' km' : Math.round(m) + ' m'; }
+
+  function render(data) {
+    resultLayer.clearLayers();
+    resultsEl.innerHTML = '';
+    L.marker([data.median.lat, data.median.lng], { icon: dot('#f59e0b', '#f59e0b', 16, '50%', '') })
+      .bindTooltip('Geometric median').addTo(resultLayer);
+
+    if (!data.candidates.length) {
+      resultsEl.innerHTML = '<div class="hint">Nothing matching that vibe nearby. Try another vibe or a wider area.</div>';
+      return;
+    }
+
+    var bounds = [[data.median.lat, data.median.lng]];
+    origins.forEach((o) => { bounds.push([o.lat, o.lng]); });
+
+    data.candidates.forEach((c, i) => {
+      var p = c.place;
+      bounds.push([p.lat, p.lng]);
+      var marker = L.marker([p.lat, p.lng], {
+        icon: dot(i === 0 ? '#3b82f6' : '#4b5563', '#fff', 24, '6px', i + 1)
+      }).bindTooltip(p.name).addTo(resultLayer);
+
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = '<div><span class="rank">' + (i + 1) + '</span><span class="name"></span>'
+        + '<span class="kind"></span></div><div class="stats">worst ' + dist(c.maxCostMeters)
+        + ' &middot; avg ' + dist(c.averageCostMeters) + ' &middot; gap ' + dist(c.fairnessGap) + '</div>';
+      card.querySelector('.name').textContent = p.name;
+      card.querySelector('.kind').textContent = p.category.replace(/_/g, ' ');
+      card.onclick = () => { map.setView([p.lat, p.lng], 16); marker.openTooltip(); };
+      resultsEl.appendChild(card);
+    });
+
+    map.fitBounds(bounds, { padding: [50, 50] });
+  }
+
+  findBtn.onclick = () => {
+    errorEl.textContent = '';
+    resultsEl.innerHTML = '';
+    findBtn.disabled = true;
+    findBtn.textContent = 'Searching...';
+    fetch('/meet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        origins: origins,
+        vibe: selectedVibe,
+        minimize: document.getElementById('minimize').value,
+        radiusMeters: 3000,
+        limit: 5
+      })
+    }).then((r) => r.json().then((body) => {
+        if (!r.ok) throw new Error(body.error || body.message || 'Request failed');
+        return body;
+      })).then(render).catch((err) => {
+      errorEl.className = 'err';
+      errorEl.textContent = err.message;
+    }).then(() => {
+      findBtn.disabled = origins.length < 2;
+      findBtn.textContent = 'Find meeting spot';
+    });
+  };
+
+  redraw();
+})();
+</script>
+</body>
+</html>
