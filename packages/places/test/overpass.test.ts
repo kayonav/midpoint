@@ -124,6 +124,8 @@ describe("findPlaces", () => {
 
 		expect(init.method).toBe("POST");
 
+		expect(init.headers["User-Agent"]).toContain("midpoint");
+
 		expect(decodeURIComponent(init.body)).toContain('"amenity"="cafe"');
 	});
 
@@ -132,7 +134,9 @@ describe("findPlaces", () => {
 
 		const fetchFn = vi.fn().mockResolvedValue(fakeResponse(null, false, 429));
 
-		await expect(findPlaces(query, { cache, fetchFn })).rejects.toThrow("429");
+		await expect(
+			findPlaces(query, { cache, fetchFn, retry: { attempts: 1 } }),
+		).rejects.toThrow("429");
 	});
 
 	it("does not cache a failed request", async () => {

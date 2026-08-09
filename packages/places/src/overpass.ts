@@ -1,4 +1,5 @@
 import { type Cache, withCache } from "@midpoint/cache";
+import { fetchWithRetry, type RetryOptions } from "./retry.js";
 
 export interface Place {
 	id: number;
@@ -20,9 +21,17 @@ export interface OverpassDeps {
 	fetchFn?: typeof fetch;
 	endpoint?: string;
 	ttlSeconds?: number;
+	retry?: RetryOptions;
 }
 
-const DEFAULT_ENDPOINT = "https://overpass-api.de/api/interpreter";
+export const DEFAULT_ENDPOINT = "https://overpass-api.de/api/interpreter";
+
+/**
+ * Overpass rejects requests with a default or missing User-Agent (HTTP 406)
+ * and asks clients to identify themselves. Do not remove this.
+ */
+export const USER_AGENT = "midpoint/0.1 (github.com/kayonav/midpoint)";
+
 const DEFAULT_TTL = 60 * 60 * 24;
 
 interface OverpassElement {
@@ -76,17 +85,23 @@ export async function findPlaces(
 		fetchFn = fetch,
 		endpoint = DEFAULT_ENDPOINT,
 		ttlSeconds = DEFAULT_TTL,
+		retry,
 	} = deps;
 
 	return withCache(cache, cacheKey(q), ttlSeconds, async () => {
-		const res = await fetchFn(endpoint, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/x-www-form-urlencoded",
-				"User-Agent": "midpoint/0.1 (github.com/kayonav/midpoint)",
+		const res = await fetchWithRetry(
+			fetchFn,
+			endpoint,
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					"User-Agent": USER_AGENT,
+				},
+				body: `data=${encodeURIComponent(buildQuery(q))}`,
 			},
-			body: `data=${encodeURIComponent(buildQuery(q))}`,
-		});
+			retry,
+		);
 
 		if (!res.ok) {
 			throw new Error(`Overpass request failed: ${res.status}`);

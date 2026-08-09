@@ -23,7 +23,7 @@ export function buildServer() {
 	app.post("/meet", async (request, reply) => {
 		try {
 			return await planMeet(request.body as MeetRequest, (q) =>
-				findPlaces(q, { cache }),
+				findPlaces(q, { cache, endpoint: process.env.OVERPASS_URL }),
 			);
 		} catch (err) {
 			if (err instanceof ValidationError) {
