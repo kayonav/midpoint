@@ -81,7 +81,10 @@ export async function findPlaces(
 	return withCache(cache, cacheKey(q), ttlSeconds, async () => {
 		const res = await fetchFn(endpoint, {
 			method: "POST",
-			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			headers: {
+				"Content-Type": "application/x-www-form-urlencoded",
+				"User-Agent": "midpoint/0.1 (github.com/kayonav/midpoint)",
+			},
 			body: `data=${encodeURIComponent(buildQuery(q))}`,
 		});
 
